@@ -37,6 +37,11 @@ if (NOT OUT_DIR)
   set(OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+if (NOT OUT_FILE)
+  cmake_path(REPLACE_EXTENSION testFileName LAST_ONLY ".pre.${PASS}.mir" OUTPUT_VARIABLE OUT_FILE)
+  set(OUT_FILE "${OUT_DIR}/${OUT_FILE}")
+endif()
+
 if (NOT RESULT_FILE)
   set(RESULT_FILE "${OUT_DIR}/${testFileName}.${PASS}.results.txt")
 endif()
@@ -49,44 +54,53 @@ if (NOT STATUS_FILE)
   set(STATUS_FILE "${OUT_DIR}/test_status.txt")
 endif()
 
+if (NOT ERROR_FILE)
+  set(ERROR_FILE "${OUT_DIR}/test_errors.txt")
+endif()
+
 ####################################################################################################
 
 execute_process(
-  COMMAND ${LLC} -stop-before ${PASS} ${TEST_FILE} -o -
-  COMMAND ${LLC} -start-before ${PASS} -x mir - --filetype=null
-  RESULTS_VARIABLE testResults
-  OUTPUT_VARIABLE testMachineIR
+  COMMAND ${LLC} -stop-before ${PASS} ${TEST_FILE} -o ${OUT_FILE}
+  RESULT_VARIABLE testResult
   ERROR_VARIABLE testStdErr)
 
+if ("${testResult}" STREQUAL "0")
+  execute_process(
+    COMMAND ${LLC} -start-before ${PASS} -x mir ${OUT_FILE} --filetype=null
+    RESULT_VARIABLE testResult
+    ERROR_VARIABLE testStdErr)
+endif()
+
 set(testPassed TRUE)
-while (testResults)
-  list(POP_FRONT testResults testResult)
-  if (NOT testResult STREQUAL "0")
-    message("Failed: ${testFileName} (${PASS})")
-    file(READ "${TEST_FILE}" testContents)
-    file(APPEND "${REPORT_FILE}" "Failed: ${testFileName} (${PASS})\n")
-    file(WRITE "${RESULT_FILE}"
-      "Input file: ${TEST_FILE}\n"
-      "Result: ${testResult}\n"
-      "${testStdErr}\n\n"
-      "----------------------------------------\n"
-      "Input file contents:\n\n"
-      "${testContents}\n"
-      "----------------------------------------\n"
-      "Generated output:\n\n"
-      "${testMachineIR}"
-      )
-    file(WRITE "${STATUS_FILE}" "1")
-    unset(testPassed)
-    break()
+if (NOT testResult STREQUAL "0")
+  message("Failed: ${testFileName} (${PASS})")
+  if (EXISTS "${OUT_FILE}")
+    file(READ "${OUT_FILE}" testMachineIR)
+  else()
+    set(testMachineIR)
   endif()
-endwhile()
+  file(APPEND "${REPORT_FILE}" "Failed: ${testFileName} (${PASS})\n")
+  string(APPEND resultOutput
+    "Input file: ${TEST_FILE}\n"
+    "Generated file: ${OUT_FILE}\n"
+    "Result: ${testResult}\n"
+    "${testStdErr}\n\n"
+    "----------------------------------------\n"
+    "Generated output:\n\n"
+    "${testMachineIR}\n")
+  file(WRITE "${RESULT_FILE}"
+    "${resultOutput}")
+  file(APPEND "${ERROR_FILE}"
+    "======================================================================================\n\n"
+    "${resultOutput}\n\n")
+  file(WRITE "${STATUS_FILE}" "1")
+  unset(testPassed)
+  unset(resultOutput)
+endif()
 
 if (testPassed)
-  if (REPORT_PASSING)
-    file(APPEND "${REPORT_FILE}" "Passed: ${testFileName} (${PASS})\n")
-  endif()
-
+  file(APPEND "${REPORT_FILE}" "Passed: ${testFileName} (${PASS})\n")
   file(WRITE "${RESULT_FILE}" "0")
   if (NOT EXISTS "${STATUS_FILE}")
     file(WRITE "${STATUS_FILE}" "0")

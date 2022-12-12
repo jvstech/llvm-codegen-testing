@@ -113,7 +113,7 @@ while (testFiles)
     add_custom_command(OUTPUT "${resultFile}"
       COMMAND ${CMAKE_COMMAND}
         ARGS -DLLC=${LLC_EXE} -DPASS=${passName} -DTEST_FILE=${testFile} -DRESULT_FILE=${resultFile}
-          -DREPORT_FILE=${reportFile} -DSTATUS_FILE=${statusFile}
+          -DREPORT_FILE=${reportFile} -DSTATUS_FILE=${statusFile} -DOUT_DIR=${testOutputDir}
           -P ${PROJECT_SOURCE_DIR}/scripts/run-test.cmake
       COMMENT "Testing ${testRelPath} (${passName})")
     set(testName ${passName}_${baseTestName})
